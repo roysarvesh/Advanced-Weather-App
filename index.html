@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather App Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom Styles */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .weather-card {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-4xl p-4 sm:p-6 md:p-8">
+        <div class="bg-gray-800/50 weather-card rounded-3xl shadow-2xl overflow-hidden">
+            <div class="p-4 sm:p-6 md:p-8">
+                <!-- Search Section -->
+                <div class="flex flex-col sm:flex-row gap-4 mb-6">
+                    <input type="text" id="cityInput" placeholder="Enter City Name" class="flex-grow bg-gray-700/50 text-white placeholder-gray-400 border-2 border-transparent focus:border-blue-500 focus:ring-0 rounded-full px-6 py-3 text-lg outline-none transition-all duration-300">
+                    <button id="searchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-full px-8 py-3 text-lg transition-all duration-300 shadow-lg hover:shadow-blue-500/50">Search</button>
+                </div>
+
+                <!-- Main Weather Display -->
+                <div id="weather-info" class="text-center mb-8 hidden">
+                    <h2 id="cityName" class="text-4xl sm:text-5xl font-bold">City Name</h2>
+                    <p id="currentDate" class="text-lg text-gray-400 mb-4">Date</p>
+                    <div class="flex items-center justify-center gap-4 mb-4">
+                        <img id="weatherIcon" src="" alt="Weather Icon" class="w-20 h-20 sm:w-24 sm:h-24">
+                        <div>
+                            <p id="temperature" class="text-6xl sm:text-7xl font-extrabold">0°C</p>
+                            <p id="weatherDescription" class="text-xl text-gray-300 capitalize">Description</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-lg">
+                        <div class="bg-gray-700/50 p-4 rounded-xl">
+                            <p class="font-semibold">Feels Like</p>
+                            <p id="feelsLike">0°C</p>
+                        </div>
+                        <div class="bg-gray-700/50 p-4 rounded-xl">
+                            <p class="font-semibold">Humidity</p>
+                            <p id="humidity">0%</p>
+                        </div>
+                         <div class="bg-gray-700/50 p-4 rounded-xl">
+                            <p class="font-semibold">Wind Speed</p>
+                            <p id="windSpeed">0 m/s</p>
+                        </div>
+                        <div class="bg-gray-700/50 p-4 rounded-xl">
+                            <p class="font-semibold">Pressure</p>
+                            <p id="pressure">0 hPa</p>
+                        </div>
+                        <div class="bg-gray-700/50 p-4 rounded-xl">
+                            <p class="font-semibold">Timezone</p>
+                            <p id="timezone">--</p>
+                        </div>
+                        <div class="bg-gray-700/50 p-4 rounded-xl">
+                            <p class="font-semibold">Local Time</p>
+                            <p id="localTime">--:--</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5-Day Forecast -->
+                <div id="forecast" class="hidden">
+                    <h3 class="text-2xl font-bold mb-4 text-center sm:text-left">5-Day Forecast</h3>
+                    <div id="forecast-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                        <!-- Forecast cards will be injected here -->
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div id="error-message" class="text-center text-red-400 text-lg mt-4 hidden">
+                    <p>An error occurred. Please try again.</p>
+                </div>
+                 <!-- Loading Spinner -->
+                <div id="loader" class="text-center mt-8 hidden">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+                    <p class="mt-2">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const cityInput = document.getElementById('cityInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const weatherInfo = document.getElementById('weather-info');
+        const forecastContainer = document.getElementById('forecast-container');
+        const forecastSection = document.getElementById('forecast');
+        const errorMessage = document.getElementById('error-message');
+        const loader = document.getElementById('loader');
+
+        // DOM Elements for current weather
+        const cityNameEl = document.getElementById('cityName');
+        const currentDateEl = document.getElementById('currentDate');
+        const weatherIconEl = document.getElementById('weatherIcon');
+        const temperatureEl = document.getElementById('temperature');
+        const weatherDescriptionEl = document.getElementById('weatherDescription');
+        const humidityEl = document.getElementById('humidity');
+        const windSpeedEl = document.getElementById('windSpeed');
+        const pressureEl = document.getElementById('pressure');
+        const feelsLikeEl = document.getElementById('feelsLike');
+        const timezoneEl = document.getElementById('timezone');
+        const localTimeEl = document.getElementById('localTime');
+
+        let timeInterval = null;
+        let currentCityTimezone = null;
+
+        searchBtn.addEventListener('click', () => {
+            const city = cityInput.value.trim();
+            if (city) {
+                getWeather(city);
+            }
+        });
+        
+        cityInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                const city = cityInput.value.trim();
+                if (city) {
+                    getWeather(city);
+                }
+            }
+        });
+
+        async function getWeather(city) {
+            weatherInfo.classList.add('hidden');
+            forecastSection.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            if (timeInterval) clearInterval(timeInterval);
+
+            try {
+                const prompt = `
+                Get the current weather and a 5-day forecast for ${city}. 
+                Respond with a single JSON object only. Do not include any other text, markdown, or explanations.
+                The JSON object must have two keys: "current" and "forecast".
+
+                The "current" object must contain:
+                - name: The city name (string).
+                - dt: The current timestamp in epoch seconds (number).
+                - timezone: The IANA timezone name for the location, e.g., "America/New_York" (string).
+                - weather: An array with one object containing:
+                    - description: A short description of the weather, e.g., "clear sky" (string).
+                    - icon: An OpenWeatherMap icon code, e.g., "01d" (string).
+                - main: An object containing:
+                    - temp: The current temperature in Celsius (number).
+                    - feels_like: The "feels like" temperature in Celsius (number).
+                    - humidity: The humidity percentage (number).
+                    - pressure: The atmospheric pressure in hPa (number).
+                - wind: An object containing:
+                    - speed: The wind speed in m/s (number).
+
+                The "forecast" array must contain exactly 5 objects, one for each of the next 5 days. Each object must contain:
+                - dt: The timestamp for that day in epoch seconds (number).
+                - weather: An array with one object containing:
+                    - description: A short description of the weather (string).
+                    - icon: An OpenWeatherMap icon code (string).
+                - main: An object containing:
+                    - temp: The average temperature for the day in Celsius (number).
+                `;
+
+                const apiKey = ""; // Gemini API key is handled by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                    }
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`AI API request failed with status ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (!result.candidates || !result.candidates[0].content || !result.candidates[0].content.parts[0].text) {
+                     throw new Error('Invalid response structure from AI.');
+                }
+                
+                let weatherDataText = result.candidates[0].content.parts[0].text;
+                
+                // Clean the response text to ensure it's valid JSON
+                if (weatherDataText.startsWith("```json")) {
+                    weatherDataText = weatherDataText.substring(7, weatherDataText.length - 3).trim();
+                } else if (weatherDataText.startsWith("```")) {
+                     weatherDataText = weatherDataText.substring(3, weatherDataText.length - 3).trim();
+                }
+
+                let weatherData;
+                try {
+                    weatherData = JSON.parse(weatherDataText);
+                } catch (parseError) {
+                    console.error("Failed to parse JSON:", weatherDataText);
+                    throw new Error("Received malformed data from the AI.");
+                }
+
+
+                updateCurrentWeatherUI(weatherData.current);
+                updateForecastUI(weatherData.forecast);
+
+                weatherInfo.classList.remove('hidden');
+                forecastSection.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Error fetching weather data:", error);
+                errorMessage.querySelector('p').textContent = `An error occurred: ${error.message}. Please try a different city.`;
+                errorMessage.classList.remove('hidden');
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        function updateLocalTime() {
+            if (!currentCityTimezone) return;
+            const now = new Date();
+            const localTimeString = now.toLocaleTimeString('en-US', {
+                timeZone: currentCityTimezone,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+            localTimeEl.textContent = localTimeString;
+        }
+
+        function updateCurrentWeatherUI(data) {
+            cityNameEl.textContent = data.name;
+            currentDateEl.textContent = new Date().toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            weatherIconEl.src = `https://openweathermap.org/img/wn/${data.weather[0].icon}@2x.png`;
+            temperatureEl.textContent = `${Math.round(data.main.temp)}°C`;
+            weatherDescriptionEl.textContent = data.weather[0].description;
+            humidityEl.textContent = `${data.main.humidity}%`;
+            windSpeedEl.textContent = `${data.wind.speed} m/s`;
+            pressureEl.textContent = `${data.main.pressure} hPa`;
+            feelsLikeEl.textContent = `${Math.round(data.main.feels_like)}°C`;
+            
+            // Handle timezone and local time
+            currentCityTimezone = data.timezone;
+            timezoneEl.textContent = currentCityTimezone.replace(/_/g, ' ');
+            updateLocalTime(); // Initial call
+            timeInterval = setInterval(updateLocalTime, 1000); // Update every second
+        }
+
+        function updateForecastUI(forecastList) {
+            forecastContainer.innerHTML = '';
+            
+            forecastList.forEach(day => {
+                const forecastCard = document.createElement('div');
+                forecastCard.className = 'bg-gray-700/50 p-4 rounded-xl text-center';
+                
+                const dayName = new Date(day.dt * 1000).toLocaleDateString('en-US', { weekday: 'short', timeZone: currentCityTimezone });
+                const iconUrl = `https://openweathermap.org/img/wn/${day.weather[0].icon}.png`;
+                const temp = `${Math.round(day.main.temp)}°C`;
+
+                forecastCard.innerHTML = `
+                    <p class="font-semibold text-lg">${dayName}</p>
+                    <img src="${iconUrl}" alt="${day.weather[0].description}" class="mx-auto w-12 h-12">
+                    <p class="text-xl font-bold">${temp}</p>
+                `;
+                forecastContainer.appendChild(forecastCard);
+            });
+        }
+        
+        // Load default weather on page load
+        window.onload = () => {
+            getWeather('Faridabad'); 
+        };
+
+    </script>
+</body>
+</html>
